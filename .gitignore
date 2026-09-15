@@ -1,0 +1,22 @@
+__pycache__/
+*.py[cod]
+
+# Ambientes Python
+.venv/
+venv/
+
+# Arquivos gerados pelo PyInstaller
+build/
+dist/
+*.spec
+
+# Configurações e relatórios locais
+config.json
+Relatorio_Instalacao_*.csv
+reexecutar_falhas.txt
+
+# Arquivos do sistema e editores
+.DS_Store
+Thumbs.db
+.vscode/
+.idea/
