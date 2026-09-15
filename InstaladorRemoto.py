@@ -116,12 +116,20 @@ class InstallerApp:
         self.build_interface()
         self.load_settings()
         self.on_validation_changed()
+        self.root.bind("<Configure>", self.on_window_resize)
+        self.root.after_idle(lambda: self.apply_responsive_layout(self.root.winfo_width()))
         self.root.after(100, self.consume_output)
 
     def configure_window(self) -> None:
         self.root.title(f"{APP_NAME} - Python x64")
-        self.root.geometry("1120x900")
-        self.root.minsize(980, 780)
+        screen_width = self.root.winfo_screenwidth()
+        screen_height = self.root.winfo_screenheight()
+        width = min(1240, max(820, int(screen_width * 0.88)))
+        height = min(900, max(620, int(screen_height * 0.84)))
+        position_x = max(0, (screen_width - width) // 2)
+        position_y = max(0, (screen_height - height) // 2)
+        self.root.geometry(f"{width}x{height}+{position_x}+{position_y}")
+        self.root.minsize(760, 600)
         self.root.configure(bg=COLORS["background"])
         self.root.protocol("WM_DELETE_WINDOW", self.on_close)
 
@@ -156,22 +164,47 @@ class InstallerApp:
         header_inner.pack(fill="both", expand=True, padx=30, pady=18)
         tk.Label(header_inner, text="INSTALADOR REMOTO", bg=COLORS["navy"], fg="#AFC7DE", font=("Segoe UI", 9, "bold")).pack(anchor="w")
         tk.Label(header_inner, text="Implantação de software via PsExec", bg=COLORS["navy"], fg="#FFFFFF", font=("Segoe UI", 20, "bold")).pack(anchor="w", pady=(2, 0))
-        tk.Label(header_inner, text="WINDOWS  •  X64  •  ADMINISTRADOR", bg=COLORS["navy_light"], fg="#DCEBFA", font=("Segoe UI", 8, "bold"), padx=12, pady=6).place(relx=1.0, rely=0.5, anchor="e")
+        self.header_badge = tk.Label(header_inner, text="WINDOWS  •  X64  •  ADMINISTRADOR", bg=COLORS["navy_light"], fg="#DCEBFA", font=("Segoe UI", 8, "bold"), padx=12, pady=6)
+        self.header_badge.place(relx=1.0, rely=0.5, anchor="e")
 
-        outer = tk.Frame(self.root, bg=COLORS["background"])
-        outer.pack(fill="both", expand=True, padx=24, pady=18)
+        footer = tk.Frame(self.root, bg="#E7EDF4", height=44)
+        footer.pack(fill="x", side="bottom")
+        footer.pack_propagate(False)
+        self.status_label = tk.Label(footer, textvariable=self.status, bg=COLORS["green_soft"], fg=COLORS["green"], font=("Segoe UI", 9, "bold"), padx=12, pady=5)
+        self.status_label.pack(side="left", padx=(24, 12), pady=8)
+        self.progress = ttk.Progressbar(footer, mode="indeterminate", length=180)
+        self.progress.pack(side="left", pady=12)
+        self.footer_info = tk.Label(footer, text="Execução remota como SYSTEM", bg="#E7EDF4", fg=COLORS["muted"], font=("Segoe UI", 8))
+        self.footer_info.pack(side="right", padx=24)
+
+        body = tk.Frame(self.root, bg=COLORS["background"])
+        body.pack(fill="both", expand=True)
+        body.rowconfigure(0, weight=1)
+        body.columnconfigure(0, weight=1)
+        self.content_canvas = tk.Canvas(body, bg=COLORS["background"], highlightthickness=0)
+        content_scroll = ttk.Scrollbar(body, orient="vertical", command=self.content_canvas.yview)
+        self.content_canvas.configure(yscrollcommand=content_scroll.set)
+        self.content_canvas.grid(row=0, column=0, sticky="nsew")
+        content_scroll.grid(row=0, column=1, sticky="ns")
+
+        outer = tk.Frame(self.content_canvas, bg=COLORS["background"])
+        self.content_window = self.content_canvas.create_window((0, 0), window=outer, anchor="nw")
+        outer.bind("<Configure>", self.on_content_resize)
+        self.content_canvas.bind("<Configure>", self.on_canvas_resize)
         outer.columnconfigure(0, weight=1)
         outer.rowconfigure(2, weight=1)
 
         form_card = self.create_card(outer)
-        form_card.grid(row=0, column=0, sticky="ew")
+        form_card.grid(row=0, column=0, sticky="ew", padx=24, pady=(18, 0))
         form_card.columnconfigure(0, weight=1)
         form = ttk.Frame(form_card, padding=(20, 16, 20, 18))
         form.grid(row=0, column=0, sticky="ew")
+        self.form = form
         form.columnconfigure(0, weight=1, uniform="section")
         form.columnconfigure(2, weight=1, uniform="section")
 
         package_form = ttk.Frame(form)
+        self.package_form = package_form
         package_form.grid(row=0, column=0, sticky="nsew")
         package_form.columnconfigure(1, weight=1)
         self.add_section_title(package_form, 0, "1", "Pacote de instalação", "Origem, instalador e execução silenciosa.")
@@ -180,9 +213,11 @@ class InstallerApp:
         self.add_entry_row(package_form, 3, "Parâmetros", self.silent_args, "MSI: /qn /norestart")
         self.add_validation_rows(package_form, 4)
 
-        ttk.Separator(form, orient="vertical").grid(row=0, column=1, sticky="ns", padx=18)
+        self.form_separator = ttk.Separator(form, orient="vertical")
+        self.form_separator.grid(row=0, column=1, sticky="ns", padx=18)
 
         remote_form = ttk.Frame(form)
+        self.remote_form = remote_form
         remote_form.grid(row=0, column=2, sticky="nsew")
         remote_form.columnconfigure(1, weight=1)
         self.add_section_title(remote_form, 0, "2", "Destino e computadores", "Lista, PsExec e pasta remota.")
@@ -192,13 +227,17 @@ class InstallerApp:
         self.add_throttle_row(remote_form, 4)
 
         actions_card = self.create_card(outer)
-        actions_card.grid(row=1, column=0, sticky="ew", pady=(14, 0))
+        actions_card.grid(row=1, column=0, sticky="ew", padx=24, pady=(14, 0))
         actions = ttk.Frame(actions_card, padding=(18, 14))
+        self.actions = actions
         actions.pack(fill="x")
         actions.columnconfigure(1, weight=1)
-        tk.Label(actions, text="3", bg=COLORS["green_soft"], fg=COLORS["green"], font=("Segoe UI", 10, "bold"), width=3, height=1).grid(row=0, column=0, rowspan=2, padx=(0, 12))
-        ttk.Label(actions, text="Validar e executar", style="Field.TLabel").grid(row=0, column=1, sticky="w")
-        ttk.Label(actions, text="Teste o acesso antes de iniciar a implantação.", style="Hint.TLabel").grid(row=1, column=1, sticky="w")
+        self.action_badge = tk.Label(actions, text="3", bg=COLORS["green_soft"], fg=COLORS["green"], font=("Segoe UI", 10, "bold"), width=3, height=1)
+        self.action_badge.grid(row=0, column=0, rowspan=2, padx=(0, 12))
+        self.action_title = ttk.Label(actions, text="Validar e executar", style="Field.TLabel")
+        self.action_title.grid(row=0, column=1, sticky="w")
+        self.action_subtitle = ttk.Label(actions, text="Teste o acesso antes de iniciar a implantação.", style="Hint.TLabel")
+        self.action_subtitle.grid(row=1, column=1, sticky="w")
         self.test_button = ttk.Button(actions, text="Testar acesso", style="Secondary.TButton", command=lambda: self.start("Test"))
         self.test_button.grid(row=0, column=2, rowspan=2, padx=(18, 8), sticky="ew")
         self.retry_button = ttk.Button(actions, text="Reexecutar falhas", style="Secondary.TButton", command=self.retry_failures, state="disabled")
@@ -207,7 +246,7 @@ class InstallerApp:
         self.run_button.grid(row=0, column=4, rowspan=2, sticky="ew")
 
         output_card = self.create_card(outer)
-        output_card.grid(row=2, column=0, sticky="nsew", pady=(14, 0))
+        output_card.grid(row=2, column=0, sticky="nsew", padx=24, pady=(14, 18))
         output_card.columnconfigure(0, weight=1)
         output_card.rowconfigure(2, weight=1)
         output_header = ttk.Frame(output_card, padding=(16, 11, 12, 8))
@@ -220,6 +259,7 @@ class InstallerApp:
         table_frame = ttk.Frame(output_card, padding=(10, 0, 10, 9))
         table_frame.grid(row=1, column=0, sticky="ew")
         table_frame.columnconfigure(0, weight=1)
+        table_frame.rowconfigure(0, weight=1)
         columns = ("computer", "access", "copy", "install", "validation", "cleanup", "duration", "details")
         self.machine_table = ttk.Treeview(table_frame, columns=columns, show="headings", height=7)
         headings = {
@@ -234,9 +274,11 @@ class InstallerApp:
         self.machine_table.tag_configure("failure", background="#FFF0EF")
         self.machine_table.tag_configure("running", background="#EDF5FF")
         table_scroll = ttk.Scrollbar(table_frame, orient="vertical", command=self.machine_table.yview)
-        self.machine_table.configure(yscrollcommand=table_scroll.set)
-        self.machine_table.grid(row=0, column=0, sticky="ew")
+        table_scroll_x = ttk.Scrollbar(table_frame, orient="horizontal", command=self.machine_table.xview)
+        self.machine_table.configure(yscrollcommand=table_scroll.set, xscrollcommand=table_scroll_x.set)
+        self.machine_table.grid(row=0, column=0, sticky="nsew")
         table_scroll.grid(row=0, column=1, sticky="ns")
+        table_scroll_x.grid(row=1, column=0, sticky="ew")
 
         console = tk.Frame(output_card, bg=COLORS["console"])
         console.grid(row=2, column=0, sticky="nsew", padx=1, pady=(0, 1))
@@ -252,14 +294,65 @@ class InstallerApp:
         self.output.tag_configure("warning", foreground="#F7C873")
         self.output.tag_configure("normal", foreground=COLORS["console_text"])
 
-        footer = tk.Frame(self.root, bg="#E7EDF4", height=44)
-        footer.pack(fill="x", side="bottom")
-        footer.pack_propagate(False)
-        self.status_label = tk.Label(footer, textvariable=self.status, bg=COLORS["green_soft"], fg=COLORS["green"], font=("Segoe UI", 9, "bold"), padx=12, pady=5)
-        self.status_label.pack(side="left", padx=(24, 12), pady=8)
-        self.progress = ttk.Progressbar(footer, mode="indeterminate", length=180)
-        self.progress.pack(side="left", pady=12)
-        tk.Label(footer, text="Execução remota como SYSTEM", bg="#E7EDF4", fg=COLORS["muted"], font=("Segoe UI", 8)).pack(side="right", padx=24)
+        self.responsive_mode = None
+
+    def on_content_resize(self, _event=None) -> None:
+        self.content_canvas.configure(scrollregion=self.content_canvas.bbox("all"))
+
+    def on_canvas_resize(self, event) -> None:
+        self.content_canvas.itemconfigure(self.content_window, width=event.width)
+        self.content_canvas.configure(scrollregion=self.content_canvas.bbox("all"))
+
+    def on_window_resize(self, event) -> None:
+        if event.widget is self.root:
+            self.apply_responsive_layout(event.width)
+
+    def apply_responsive_layout(self, width: int) -> None:
+        mode = "wide" if width >= 1020 else "compact"
+        if mode == self.responsive_mode:
+            return
+        self.responsive_mode = mode
+
+        if mode == "wide":
+            self.form.columnconfigure(0, weight=1, uniform="section")
+            self.form.columnconfigure(1, weight=0, uniform="")
+            self.form.columnconfigure(2, weight=1, uniform="section")
+            self.package_form.grid_configure(row=0, column=0, columnspan=1, sticky="nsew")
+            self.form_separator.configure(orient="vertical")
+            self.form_separator.grid_configure(row=0, column=1, columnspan=1, sticky="ns", padx=18, pady=0)
+            self.remote_form.grid_configure(row=0, column=2, columnspan=1, sticky="nsew")
+
+            for column in range(5):
+                self.actions.columnconfigure(column, weight=1 if column == 1 else 0)
+            self.action_badge.grid_configure(row=0, column=0, columnspan=1, rowspan=2, padx=(0, 12), pady=0, sticky="")
+            self.action_title.grid_configure(row=0, column=1, columnspan=1, sticky="w")
+            self.action_subtitle.grid_configure(row=1, column=1, columnspan=1, sticky="w")
+            self.test_button.grid_configure(row=0, column=2, rowspan=2, padx=(18, 8), pady=0, sticky="ew")
+            self.retry_button.grid_configure(row=0, column=3, rowspan=2, padx=(0, 8), pady=0, sticky="ew")
+            self.run_button.grid_configure(row=0, column=4, rowspan=2, padx=0, pady=0, sticky="ew")
+            self.header_badge.place(relx=1.0, rely=0.5, anchor="e")
+            self.footer_info.pack(side="right", padx=24)
+        else:
+            self.form.columnconfigure(0, weight=1, uniform="")
+            self.form.columnconfigure(1, weight=0, uniform="")
+            self.form.columnconfigure(2, weight=0, uniform="")
+            self.package_form.grid_configure(row=0, column=0, columnspan=3, sticky="ew")
+            self.form_separator.configure(orient="horizontal")
+            self.form_separator.grid_configure(row=1, column=0, columnspan=3, sticky="ew", padx=0, pady=14)
+            self.remote_form.grid_configure(row=2, column=0, columnspan=3, sticky="ew")
+
+            for column in range(5):
+                self.actions.columnconfigure(column, weight=1 if column < 3 else 0)
+            self.action_badge.grid_configure(row=0, column=0, columnspan=1, rowspan=2, padx=(0, 12), pady=0, sticky="w")
+            self.action_title.grid_configure(row=0, column=1, columnspan=2, sticky="w")
+            self.action_subtitle.grid_configure(row=1, column=1, columnspan=2, sticky="w")
+            self.test_button.grid_configure(row=2, column=0, rowspan=1, padx=(0, 6), pady=(12, 0), sticky="ew")
+            self.retry_button.grid_configure(row=2, column=1, rowspan=1, padx=6, pady=(12, 0), sticky="ew")
+            self.run_button.grid_configure(row=2, column=2, rowspan=1, padx=(6, 0), pady=(12, 0), sticky="ew")
+            self.header_badge.place_forget()
+            self.footer_info.pack_forget()
+
+        self.root.after_idle(self.on_content_resize)
 
     def create_card(self, parent) -> tk.Frame:
         return tk.Frame(parent, bg=COLORS["card"], highlightbackground=COLORS["border"], highlightthickness=1)

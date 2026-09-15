@@ -2,7 +2,7 @@
 
 Interface para Windows feita em Python com `tkinter`. O script `RemoteInstallerParallel.ps1` controla a fila, a cópia direta, o PsExec e a instalação remota.
 
-A interface possui layout corporativo em etapas, painel de andamento com destaque por cores e status permanente da execução.
+A interface possui layout corporativo responsivo, painel de andamento com destaque por cores e status permanente da execução. Em janelas menores, os formulários e botões são reorganizados automaticamente; a área principal e a tabela possuem barras de rolagem.
 
 ## Forma mais rápida de usar
 
