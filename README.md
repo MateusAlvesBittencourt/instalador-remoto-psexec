@@ -69,6 +69,6 @@ MSI:
 msiexec.exe /i "C:\Temp\NomeDoPacote\aplicativo.msi" /qn /norestart
 ```
 
-Ao final, um relatório CSV detalhado é criado na Área de Trabalho. Ele contém acesso, cópia, instalação, código de saída, validação, limpeza, duração e motivo da falha. Códigos `0`, `1641` e `3010` são tratados como sucesso; os dois últimos indicam necessidade de reinicialização.
+Os resultados permanecem na tabela da interface e podem ser copiados pelo botão “Copiar relatório”. Nenhum relatório CSV é gerado automaticamente após a execução. Códigos `0`, `1641` e `3010` são tratados como sucesso; os dois últimos indicam necessidade de reinicialização.
 
-Depois que o instalador retorna sucesso, a pasta copiada é excluída de `C:\Temp`. Se a instalação falhar, os arquivos são mantidos para diagnóstico. O resultado aparece na coluna `Cleanup` do relatório.
+Depois que o instalador retorna sucesso, a pasta copiada é excluída de `C:\Temp`. Se a instalação falhar, os arquivos são mantidos para diagnóstico. O resultado aparece na coluna `Limpeza` da tabela.
