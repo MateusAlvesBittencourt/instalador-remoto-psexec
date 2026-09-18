@@ -398,11 +398,6 @@ try {
         if ($active.Count -gt 0) { Start-Sleep -Milliseconds 200 }
     }
 
-    $reportPath = Join-Path ([Environment]::GetFolderPath('Desktop')) ('Relatorio_Instalacao_{0}.csv' -f (Get-Date -Format 'yyyyMMdd_HHmmss'))
-    $ordered = foreach ($computer in $computers) { $summary | Where-Object { $_.Computer -eq $computer } | Select-Object -First 1 }
-    $ordered | Select-Object Computer, Access, Copy, Install, ExitCode, Validation, Cleanup, DurationSeconds, ErrorReason, Overall |
-        Export-Csv -LiteralPath $reportPath -NoTypeInformation -Encoding UTF8
-    Write-Output "Relatorio criado: $reportPath"
     exit 0
 }
 catch {
